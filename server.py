@@ -20,24 +20,22 @@ def get_video_url():
     print(f"Processing URL: {video_url}")
 
     try:
-        # 👇 MAGIC FIX: Client Spoofing 👇
-        # Hum yt-dlp ko bolenge ki "Android" client use karo
+        # 👇 MAGIC FIX 2.0: iOS Client Spoofing 👇
+        # Ab hum YouTube ko bolenge ki hum "iPhone" hain.
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'quiet': True,
             'forceurl': True, 
             'noplaylist': True,
-            # Yahan hum YouTube ko bata rahe hain ki hum Android App hain
+            
+            # YouTube ko dhokha dene ke liye settings
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'web'],
+                    # 'ios' client aksar server blocks ko bypass kar leta hai
+                    'player_client': ['ios', 'web'],
                     'player_skip': ['webpage', 'configs', 'js'],
                     'include_ssl_logs': False
                 }
-            },
-            # User Agent bhi change kar diya
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36'
             }
         }
 
@@ -62,6 +60,5 @@ def get_video_url():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Fallback port 5001 taaki Mac ke Port 5000 se takkar na ho
     port = int(os.environ.get("PORT", 5001))
     app.run(host='0.0.0.0', port=port)

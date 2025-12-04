@@ -1,5 +1,2 @@
 flask
-flask-cors
-yt-dlp
-gunicorn
-requests
+yt-dlp@git+https://github.com/yt-dlp/yt-dlp.git@master

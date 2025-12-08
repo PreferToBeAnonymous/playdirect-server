@@ -1,74 +1,70 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, stream_with_context
+from flask_cors import CORS
 import yt_dlp
 import requests
+import os
 
 app = Flask(__name__)
+CORS(app)
 
-def get_direct_stream_url(video_url):
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"message": "PlayDirect Server is Running! 🚀"})
+
+@app.route('/get-video', methods=['GET'])
+def get_video_url():
+    video_url = request.args.get('url')
+    
+    if not video_url:
+        return jsonify({'success': False, 'error': 'No URL provided'}), 400
+
+    print(f"Processing URL: {video_url}")
+
     try:
+        # 👇 COOKIES ENABLED HERE 👇
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'quiet': True,
+            'forceurl': True, 
             'noplaylist': True,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web'],
-                    'skip': ['hls', 'dash'] 
-                }
-            },
-            'user_agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+            'cookiefile': 'cookies.txt',  # <--- YEH LINE MAGIC KAREGI
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
-            return info.get('url', None), info.get('title', 'Video')
-            
+            download_url = info.get('url', None)
+            title = info.get('title', 'Video')
+
+            if download_url:
+                print(f"Success: Link extracted for {title}")
+                # Proxy URL return karein
+                return jsonify({
+                    'success': True,
+                    'title': title,
+                    'download_url': download_url,
+                    'proxy': True
+                })
+            else:
+                return jsonify({'success': False, 'error': 'Could not extract link'})
+
     except Exception as e:
-        print(f"Error fetching: {e}")
-        return None, str(e)
+        print(f"Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/get-video', methods=['GET'])
-def get_video():
-    url = request.args.get('url')
-    if not url:
-        return jsonify({'success': False, 'error': 'No URL provided'}), 400
-
-    print(f"Processing URL: {url}")
-    
-    # 1. Get Direct Link
-    download_url, title = get_direct_stream_url(url)
-    
-    if download_url:
-        return jsonify({
-            'success': True, 
-            'title': title, 
-            'download_url': f"{request.host_url}stream-video?url={requests.utils.quote(download_url)}"
-        })
-    else:
-        return jsonify({'success': False, 'error': f'Failed: {title}'}), 500
-
+# 👇 Video Streamer (Proxy) 👇
 @app.route('/stream-video', methods=['GET'])
 def stream_video():
     video_url = request.args.get('url')
-    
-    if not video_url:
-        return "No URL provided", 400
-
     try:
         req = requests.get(video_url, stream=True)
-        
-        headers = {
-            'Content-Type': req.headers.get('Content-Type'),
-            'Content-Length': req.headers.get('Content-Length')
-        }
-
-        return Response(
-            req.iter_content(chunk_size=1024*1024), 
-            headers=headers,
-            direct_passthrough=True
-        )
+        return Response(stream_with_context(req.iter_content(chunk_size=1024)), 
+                        content_type=req.headers['content-type'])
     except Exception as e:
-        return f"Stream Error: {e}", 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host='0.0.0.0', port=port)
